@@ -1,0 +1,16 @@
+{
+  "name": "multi-branch-demo",
+  "version": "1.0.0",
+  "description": "Multi-branch pipeline demonstration project",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "test": "echo 'Running tests for branch' && exit 0",
+    "build": "echo 'Building application' && mkdir -p dist && echo 'Built successfully' > dist/app.js",
+    "deploy:staging": "echo 'Deploying to staging environment'",
+    "deploy:production": "echo 'Deploying to production environment'"
+  },
+  "keywords": ["jenkins", "multi-branch", "pipeline", "demo"],
+  "author": "Jenkins Learning Team",
+  "license": "MIT"
+}
