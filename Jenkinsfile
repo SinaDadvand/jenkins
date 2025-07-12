@@ -3,7 +3,8 @@ pipeline {
     // Agent selection based on branch
     agent {
         // Use different agents for different branches if needed
-        label getBranchAgent(env.BRANCH_NAME)
+        // label getBranchAgent(env.BRANCH_NAME)
+        agent any
     }
     
     // Global environment variables
