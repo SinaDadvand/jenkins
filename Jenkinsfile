@@ -5,7 +5,9 @@ pipeline {
         // Use different agents for different branches if needed
         // label getBranchAgent(env.BRANCH_NAME)
         
-    
+    tools {
+        nodejs 'NodeJS-24'  // Name configured in Global Tool Configuration
+    }
     
     // Global environment variables
     environment {
