@@ -4,7 +4,7 @@ pipeline {
     agent {
         // Use different agents for different branches if needed
         // label getBranchAgent(env.BRANCH_NAME)
-        agent any
+        any
     }
     
     // Global environment variables
