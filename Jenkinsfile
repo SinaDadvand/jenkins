@@ -1,11 +1,11 @@
 // Comprehensive multi-branch pipeline with branch-specific behavior
 pipeline {
     // Agent selection based on branch
-    agent {
+    agent any
         // Use different agents for different branches if needed
         // label getBranchAgent(env.BRANCH_NAME)
-        any
-    }
+        
+    
     
     // Global environment variables
     environment {
