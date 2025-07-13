@@ -348,12 +348,13 @@ pipeline {
         
         // Stage 6: Docker Build (if applicable)
         stage('Docker Build') {
-            agent {
-                docker {
-                    image 'docker:latest'
-                    args '-v /var/run/docker.sock:/var/run/docker.sock'
-                }
-            }
+            // Remove the Docker agent and run Docker commands directly on the Jenkins master because docker cli was not installed on agent
+            // agent {
+            //     docker {
+            //         image 'docker:latest'
+            //         args '-v /var/run/docker.sock:/var/run/docker.sock'
+            //     }
+            // }
             when {
                 anyOf {
                     branch 'main'
