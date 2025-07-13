@@ -176,6 +176,17 @@ pipeline {
                 }
             }
         }
+        // Add this temporary test stage to your Jenkinsfile
+        stage('Docker CLI Test') {
+            steps {
+                sh '''
+                    echo "Testing Docker CLI availability..."
+                    docker --version
+                    docker info | head -10
+                    echo "Docker CLI test completed successfully!"
+                '''
+            }
+        }        
         
         // Stage 3: Branch-Specific Build Process
         stage('Build Application') {
@@ -478,6 +489,8 @@ EOF
                 }
             }
         }
+        
+
     }
     
     // Post-build actions
