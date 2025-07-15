@@ -1,9 +1,12 @@
 // Comprehensive multi-branch pipeline with branch-specific behavior
 pipeline {
     // Agent selection based on branch
-    agent {
+    agent any
         // Use different agents for different branches if needed
-        label getBranchAgent(env.BRANCH_NAME)
+        // label getBranchAgent(env.BRANCH_NAME)
+        
+    tools {
+        nodejs 'NodeJS-24'  // Name configured in Global Tool Configuration
     }
     
     // Global environment variables
@@ -26,56 +29,43 @@ pipeline {
     
     // Pipeline options
     options {
-        // Build timeout varies by branch type
-        timeout(time: getBranchTimeout(env.BRANCH_NAME), unit: 'MINUTES')
+        // Build timeout varies by branch type (defaulting to 45 minutes)
+        timeout(time: 45, unit: 'MINUTES')
         
-        // Keep different number of builds per branch
+        // Keep different number of builds per branch (defaulting to 10)
         buildDiscarder(logRotator(
-            numToKeepStr: getBranchBuildRetention(env.BRANCH_NAME)
+            numToKeepStr: '10'
         ))
         
         // Add timestamps to console output
         timestamps()
         
-        // Disable concurrent builds for production branches
-        script {
-            if (env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master') {
-                properties([disableConcurrentBuilds()])
-            }
-        }
+        // Skip default checkout - we'll handle it in stages
+        skipDefaultCheckout()
     }
     
     // Branch-specific parameters
     parameters {
-        // Only show certain parameters for specific branches
-        script {
-            def params = []
-            
-            // Production branch parameters
-            if (env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master') {
-                params.add(booleanParam(
-                    name: 'DEPLOY_TO_PRODUCTION',
-                    defaultValue: false,
-                    description: 'Deploy to production environment'
-                ))
-                params.add(booleanParam(
-                    name: 'RUN_PERFORMANCE_TESTS',
-                    defaultValue: true,
-                    description: 'Run performance tests'
-                ))
-            }
-            
-            // Development branch parameters
-            if (env.BRANCH_NAME.startsWith('feature/')) {
-                params.add(booleanParam(
-                    name: 'SKIP_INTEGRATION_TESTS',
-                    defaultValue: false,
-                    description: 'Skip integration tests for faster feedback'
-                ))
-            }
-            
-            return params
-        }
+        booleanParam(
+            name: 'DEPLOY_TO_PRODUCTION',
+            defaultValue: false,
+            description: 'Deploy to production environment (only for main/master branches)'
+        )
+        booleanParam(
+            name: 'RUN_PERFORMANCE_TESTS',
+            defaultValue: true,
+            description: 'Run performance tests (recommended for main/master branches)'
+        )
+        booleanParam(
+            name: 'SKIP_INTEGRATION_TESTS',
+            defaultValue: false,
+            description: 'Skip integration tests for faster feedback (useful for feature branches)'
+        )
+        booleanParam(
+            name: 'ENABLE_DEBUG_MODE',
+            defaultValue: false,
+            description: 'Enable debug mode for detailed logging'
+        )
     }
     
     stages {
@@ -83,7 +73,41 @@ pipeline {
         stage('Environment Setup') {
             steps {
                 script {
+                    // Checkout source code first
+                    checkout scm
+                    
+                    // Set branch-specific configurations
+                    echo "🔧 Setting Branch-Specific Configurations"
+                    echo "========================================="
+                    
+                    // Configure branch-specific settings
+                    def branchTimeout = getBranchTimeout(env.BRANCH_NAME)
+                    def buildRetention = getBranchBuildRetention(env.BRANCH_NAME)
+                    echo "Build timeout: ${branchTimeout} minutes"
+                    echo "Build retention: ${buildRetention} builds"
+                    
+                    // Set concurrent build policy for production branches
+                    if (env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master') {
+                        echo "🔒 Production branch detected - disabling concurrent builds"
+                        currentBuild.description = "PRODUCTION: ${env.BRANCH_NAME} #${env.BUILD_NUMBER}"
+                    }
+                    
+                    // Validate parameter usage based on branch
+                    echo "📋 Parameter Validation:"
+                    if (params.DEPLOY_TO_PRODUCTION && !(env.BRANCH_NAME in ['main', 'master'])) {
+                        echo "⚠️ Warning: DEPLOY_TO_PRODUCTION is only recommended for main/master branches"
+                    }
+                    
+                    if (params.RUN_PERFORMANCE_TESTS && env.BRANCH_NAME.startsWith('feature/')) {
+                        echo "ℹ️ Info: Performance tests enabled for feature branch (may increase build time)"
+                    }
+                    
+                    if (params.SKIP_INTEGRATION_TESTS && (env.BRANCH_NAME in ['main', 'master'])) {
+                        echo "⚠️ Warning: Skipping integration tests is not recommended for production branches"
+                    }
+                    
                     // Display comprehensive branch information
+                    echo ""
                     echo "🌿 BRANCH INFORMATION"
                     echo "===================="
                     echo "Branch Name: ${env.BRANCH_NAME}"
@@ -94,6 +118,7 @@ pipeline {
                     echo "Workspace: ${env.WORKSPACE}"
                     echo "Node Name: ${env.NODE_NAME}"
                     echo "Jenkins URL: ${env.JENKINS_URL}"
+                    echo "Debug Mode: ${params.ENABLE_DEBUG_MODE}"
                     
                     // Branch-specific information
                     def branchType = getBranchType(env.BRANCH_NAME)
@@ -104,6 +129,22 @@ pipeline {
                     
                     // Validate branch naming conventions
                     validateBranchName(env.BRANCH_NAME)
+                    
+                    // Enable debug logging if requested
+                    if (params.ENABLE_DEBUG_MODE) {
+                        echo "🐛 DEBUG MODE ENABLED"
+                        echo "===================="
+                        echo "Git Information:"
+                        sh '''
+                            echo "Git HEAD: $(git rev-parse HEAD)"
+                            echo "Git Branch: $(git symbolic-ref --short HEAD 2>/dev/null || echo 'detached')"
+                            echo "Git Remote: $(git remote get-url origin 2>/dev/null || echo 'no remote')"
+                            echo "Git Status:"
+                            git status --porcelain || echo "Clean working directory"
+                        '''
+                        echo "Environment Variables:"
+                        sh 'printenv | grep -E "(JENKINS|BUILD|BRANCH|GIT)" | sort'
+                    }
                 }
             }
         }
@@ -135,6 +176,17 @@ pipeline {
                 }
             }
         }
+        // Add this temporary test stage to your Jenkinsfile
+        stage('Docker CLI Test') {
+            steps {
+                sh '''
+                    echo "Testing Docker CLI availability..."
+                    docker --version
+                    docker info | head -10
+                    echo "Docker CLI test completed successfully!"
+                '''
+            }
+        }        
         
         // Stage 3: Branch-Specific Build Process
         stage('Build Application') {
@@ -307,6 +359,13 @@ pipeline {
         
         // Stage 6: Docker Build (if applicable)
         stage('Docker Build') {
+            // Remove the Docker agent and run Docker commands directly on the Jenkins master because docker cli was not installed on agent
+            // agent {
+            //     docker {
+            //         image 'docker:latest'
+            //         args '-v /var/run/docker.sock:/var/run/docker.sock'
+            //     }
+            // }
             when {
                 anyOf {
                     branch 'main'
@@ -430,6 +489,8 @@ EOF
                 }
             }
         }
+        
+
     }
     
     // Post-build actions
@@ -506,6 +567,7 @@ EOF
 // Helper functions for multi-branch logic
 def getBranchAgent(branchName) {
     // Return different agent labels based on branch
+    branchName = branchName ?: 'unknown'
     switch (branchName) {
         case 'main':
         case 'master':
@@ -518,6 +580,7 @@ def getBranchAgent(branchName) {
 }
 
 def getBranchEnvironment(branchName) {
+    branchName = branchName ?: 'unknown'
     switch (branchName) {
         case 'main':
         case 'master':
@@ -533,11 +596,13 @@ def getBranchEnvironment(branchName) {
 
 def shouldDeploy(branchName) {
     // Define which branches should auto-deploy
+    branchName = branchName ?: 'unknown'
     return branchName in ['develop'] || branchName.startsWith('feature/') ? 'true' : 'false'
 }
 
 def getBranchTimeout(branchName) {
     // Different timeouts for different branch types
+    branchName = branchName ?: 'unknown'
     switch (branchName) {
         case 'main':
         case 'master':
@@ -551,6 +616,7 @@ def getBranchTimeout(branchName) {
 
 def getBranchBuildRetention(branchName) {
     // Keep more builds for important branches
+    branchName = branchName ?: 'unknown'
     switch (branchName) {
         case 'main':
         case 'master':
@@ -563,6 +629,7 @@ def getBranchBuildRetention(branchName) {
 }
 
 def getBranchSlackChannel(branchName) {
+    branchName = branchName ?: 'unknown'
     switch (branchName) {
         case 'main':
         case 'master':
@@ -575,6 +642,7 @@ def getBranchSlackChannel(branchName) {
 }
 
 def getBranchType(branchName) {
+    branchName = branchName ?: 'unknown'
     if (branchName in ['main', 'master']) return 'Production'
     if (branchName == 'develop') return 'Staging'
     if (branchName.startsWith('feature/')) return 'Feature'
@@ -585,6 +653,7 @@ def getBranchType(branchName) {
 
 def validateBranchName(branchName) {
     // Enforce branch naming conventions
+    branchName = branchName ?: 'unknown'
     def validPrefixes = ['main', 'master', 'develop', 'feature/', 'hotfix/', 'release/']
     def isValid = validPrefixes.any { branchName.startsWith(it) }
     
@@ -596,6 +665,7 @@ def validateBranchName(branchName) {
 
 def createDockerTag(branchName, buildNumber) {
     // Create clean Docker tag from branch name
+    branchName = branchName ?: 'unknown'
     def cleanBranch = branchName.replaceAll('[^a-zA-Z0-9.-]', '-').toLowerCase()
     return "${cleanBranch}-${buildNumber}"
 }
