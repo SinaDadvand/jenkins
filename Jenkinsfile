@@ -380,6 +380,9 @@ pipeline {
                     
                     // Create branch-specific Docker tag
                     def dockerTag = createDockerTag(env.BRANCH_NAME, env.BUILD_NUMBER)
+
+                    // Clean branch name for Docker tag
+                    def cleanBranchName = cleanBranchName(env.BRANCH_NAME)
                     
                     sh """
                         echo "Building Docker image with tag: ${dockerTag}"
@@ -399,7 +402,7 @@ EOF
                         
                         # Build Docker image
                         docker build -t ${env.DOCKER_IMAGE}:${dockerTag} .
-                        docker tag ${env.DOCKER_IMAGE}:${dockerTag} ${env.DOCKER_IMAGE}:${env.BRANCH_NAME}-latest
+                        docker tag ${env.DOCKER_IMAGE}:${dockerTag} ${env.DOCKER_IMAGE}:${cleanBranchName}-latest
                         
                         echo "Docker image built successfully: ${env.DOCKER_IMAGE}:${dockerTag}"
                     """
@@ -669,6 +672,16 @@ def createDockerTag(branchName, buildNumber) {
     def cleanBranch = branchName.replaceAll('[^a-zA-Z0-9.-]', '-').toLowerCase()
     return "${cleanBranch}-${buildNumber}"
 }
+
+def cleanBranchName(branchName) {
+    // Clean branch name for use in artifacts and reports
+    branchName = branchName ?: 'unknown'
+    // Replace invalid characters with hyphens and convert to lowercase
+    return branchName.replaceAll('[^a-zA-Z0-9.-]', '-').toLowerCase()
+}
+
+
+
 
 def generateBuildReport(branchName, build) {
     def report = """
