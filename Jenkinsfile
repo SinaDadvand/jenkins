@@ -433,7 +433,9 @@ EOF
                     steps {
                         script {
                             echo "🚀 Automatic Deployment to ${env.TARGET_ENVIRONMENT}"
-                            
+                            // Clean branch name for Docker tag
+                            def cleanBranchName = cleanBranchName(env.BRANCH_NAME)
+
                             sh """
                                 echo "Deploying to ${env.TARGET_ENVIRONMENT} environment..."
                                 
@@ -445,7 +447,7 @@ EOF
                                 
                                 # Start application container
                                 docker run -d \\
-                                    --name ${env.APP_NAME}-${env.BRANCH_NAME} \\
+                                    --name ${env.APP_NAME}-${cleanBranchName} \\
                                     -p 3000:3000 \\
                                     ${env.DOCKER_IMAGE}:${env.DOCKER_TAG}
                                 
